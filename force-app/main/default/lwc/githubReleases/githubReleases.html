@@ -1,0 +1,27 @@
+<template>
+    <lightning-card title="GitHub Release Notes" icon-name="utility:announcement" class="card">
+        <div class="slds-p-around_medium">
+            <div class="slds-grid slds-gutters">
+                <div class="slds-col slds-size_1-of-2">
+                    <lightning-input type="text" label="Owner" value={owner} onchange={handleOwner}></lightning-input>
+                </div>
+                <div class="slds-col slds-size_1-of-2">
+                    <lightning-input type="text" label="Repo" value={repo} onchange={handleRepo}></lightning-input>
+                </div>
+            </div>
+            <div class="slds-m-top_small slds-text-align_right">
+                <lightning-button label="Fetch Releases" onclick={fetchReleases}></lightning-button>
+            </div>
+            <template if:true={releases.length}>
+                <lightning-accordion allow-multiple-sections-open>
+                    <template for:each={releases} for:item="r" for:index="i">
+                        <lightning-accordion-section key={r.tag_name} name={r.tag_name} label={r.name}>
+                            <p class="slds-text-body_small slds-m-bottom_x-small"><a href={r.html_url} target="_blank">Open on GitHub</a></p>
+                            <pre class="note">{r.body}</pre>
+                        </lightning-accordion-section>
+                    </template>
+                </lightning-accordion>
+            </template>
+        </div>
+    </lightning-card>
+</template>

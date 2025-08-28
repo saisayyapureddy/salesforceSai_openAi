@@ -1,0 +1,4 @@
+:host { display:block; }
+.card { border-radius: 0.75rem; }
+.code { font-family: monospace; min-height:120px; }
+.summary { font-weight:600; }

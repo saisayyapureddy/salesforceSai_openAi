@@ -1,0 +1,19 @@
+<template>
+    <lightning-card title="Debug Log Analyzer" icon-name="utility:activity" class="card">
+        <div class="slds-p-around_medium">
+            <lightning-textarea label="Paste Debug Log" value={text} onchange={handleChange} class="code"></lightning-textarea>
+            <div class="slds-m-top_small slds-text-align_right">
+                <lightning-button variant="brand" label="Analyze" onclick={analyze}></lightning-button>
+            </div>
+            <template if:true={metrics}>
+                <div class="slds-m-top_medium">
+                    <lightning-layout multiple-rows>
+                        <lightning-layout-item size="12">
+                            <p class="summary">{metrics.summary}</p>
+                        </lightning-layout-item>
+                    </lightning-layout>
+                </div>
+            </template>
+        </div>
+    </lightning-card>
+</template>

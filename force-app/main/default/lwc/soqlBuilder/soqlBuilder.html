@@ -1,0 +1,20 @@
+<template>
+    <lightning-card title="SOQL Builder (AI)" icon-name="utility:filter" class="card">
+        <div class="slds-p-around_medium">
+            <lightning-textarea label="Describe the data you want" value={prompt} onchange={handleChange}></lightning-textarea>
+            <div class="slds-m-top_small slds-grid slds-gutters">
+                <div class="slds-col slds-size_2-of-3">
+                    <lightning-input type="text" label="Model (optional)" value={model} onchange={handleModel}></lightning-input>
+                </div>
+                <div class="slds-col slds-size_1-of-3 slds-text-align_right">
+                    <lightning-button variant="brand" label="Build SOQL" onclick={build}></lightning-button>
+                </div>
+            </div>
+            <template if:true={soql}>
+                <div class="slds-m-top_medium">
+                    <lightning-textarea label="Generated SOQL" value={soql} readonly class="code"></lightning-textarea>
+                </div>
+            </template>
+        </div>
+    </lightning-card>
+</template>

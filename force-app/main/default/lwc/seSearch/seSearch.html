@@ -1,0 +1,19 @@
+<template>
+    <lightning-card title="Salesforce StackExchange Quick Answers" icon-name="utility:search" class="card">
+        <div class="slds-p-around_medium">
+            <lightning-input type="text" label="Search question" value={q} onchange={handleQ}></lightning-input>
+            <div class="slds-m-top_small slds-text-align_right">
+                <lightning-button label="Search" onclick={go}></lightning-button>
+            </div>
+            <template if:true={items.length}>
+                <ul class="slds-m-top_medium results">
+                    <template for:each={items} for:item="it">
+                        <li key={it.link} class="slds-m-vertical_x-small">
+                            <a href={it.link} target="_blank">{it.title}</a>
+                        </li>
+                    </template>
+                </ul>
+            </template>
+        </div>
+    </lightning-card>
+</template>

@@ -1,0 +1,3 @@
+:host { display:block; }
+.card { border-radius:0.75rem; }
+.note { background:#fafafa; padding:0.6rem; border-radius:6px; white-space:pre-wrap; }

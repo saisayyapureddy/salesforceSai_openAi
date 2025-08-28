@@ -1,0 +1,20 @@
+<template>
+    <lightning-card title="Apex Test Generator (AI)" icon-name="utility:apex" class="card">
+        <div class="slds-p-around_medium">
+            <lightning-textarea label="Paste Apex class source" value={source} onchange={handleChange} class="code"></lightning-textarea>
+            <div class="slds-m-top_small slds-grid slds-gutters">
+                <div class="slds-col slds-size_2-of-3">
+                    <lightning-input type="text" label="Model (optional)" value={model} onchange={handleModel}></lightning-input>
+                </div>
+                <div class="slds-col slds-size_1-of-3 slds-text-align_right">
+                    <lightning-button variant="brand" label="Generate Test" onclick={generate}></lightning-button>
+                </div>
+            </div>
+            <template if:true={output}>
+                <div class="slds-m-top_medium">
+                    <lightning-textarea label="@isTest Output" value={output} readonly class="code"></lightning-textarea>
+                </div>
+            </template>
+        </div>
+    </lightning-card>
+</template>

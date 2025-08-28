@@ -1,0 +1,15 @@
+:host {
+    display: block;
+    background: #ffffff;
+    border-radius: 1rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    padding: 0.5rem;
+}
+.card .slds-p-around_medium { padding: 0.75rem; }
+.code {
+    font-family: monospace;
+    background-color: #f6f8fa;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    padding: 0.5rem;
+}

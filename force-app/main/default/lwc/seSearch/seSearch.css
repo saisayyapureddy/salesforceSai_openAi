@@ -1,0 +1,4 @@
+:host { display:block; }
+.card { border-radius:0.75rem; }
+.results a { color: #0a66c2; text-decoration: none; }
+.results a:hover { text-decoration: underline; }
