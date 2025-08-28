@@ -18,7 +18,7 @@ public with sharing class OpenAIService {
     public class ChatResponse {
         public List<ChatChoice> choices;
     }
-
+    
     @AuraEnabled(cacheable=false)
     public static String chat(String systemPrompt, String userPrompt, String modelName){
         ChatRequest req = new ChatRequest();
@@ -33,6 +33,7 @@ public with sharing class OpenAIService {
         httpReq.setMethod('POST');
         httpReq.setEndpoint('callout:OpenAI_API/v1/chat/completions');
         httpReq.setHeader('Content-Type', 'application/json');
+        httpReq.setTimeout(120000);
         httpReq.setBody(JSON.serialize(req));
         Http http = new Http();
         HTTPResponse res = http.send(httpReq);
