@@ -1,250 +1,373 @@
 <template>
-    <lightning-card title="Dynamic SOQL Query Builder" icon-name="utility:search">
-        <div class="slds-m-around_medium">
-            <!-- Object Selection -->
-            <div class="slds-form-element slds-m-bottom_medium">
-                <label class="slds-form-element__label" for="objectSelect">
-                    <abbr class="slds-required" title="required">*</abbr>
-                    Select Salesforce Object
-                </label>
-                <div class="slds-form-element__control">
-                    <div class="slds-select_container">
-                        <select class="slds-select" id="objectSelect" onchange={handleObjectChange}>
-                            <option value="">Choose an object...</option>
-                            <template for:each={objectOptions} for:item="option">
-                                <option key={option.value} value={option.value}>{option.label}</option>
-                            </template>
-                        </select>
+    <div class="soql-builder-container">
+        <!-- Fixed Header -->
+        <div class="header-section">
+            <div class="header-content">
+                <div class="header-left">
+                    <lightning-icon icon-name="utility:search" size="medium" class="header-icon"></lightning-icon>
+                    <div class="header-text">
+                        <h1 class="main-title">Dynamic SOQL Query Builder</h1>
+                        <p class="subtitle">AI-Powered Salesforce Query Assistant</p>
                     </div>
                 </div>
-                <template if:true={selectedObjectDescription}>
-                    <div class="slds-form-element__help">{selectedObjectDescription}</div>
-                </template>
             </div>
+        </div>
 
-            <!-- Field Selection -->
-            <template if:true={showFieldSelection}>
-                <div class="slds-form-element slds-m-bottom_medium">
-                    <fieldset class="slds-form-element">
-                        <legend class="slds-form-element__legend slds-form-element__label">
-                            Select Fields
-                        </legend>
-                        <div class="slds-form-element__control">
-                            <div class="slds-button-group slds-m-bottom_small" role="group">
-                                <button class="slds-button slds-button_neutral" onclick={selectAllFields}>
-                                    Select All
-                                </button>
-                                <button class="slds-button slds-button_neutral" onclick={clearAllFields}>
-                                    Clear All
-                                </button>
+        <!-- Loading Spinner -->
+        <template if:true={isLoading}>
+            <div class="loading-overlay">
+                <lightning-spinner alternative-text="Loading..." size="medium"></lightning-spinner>
+            </div>
+        </template>
+
+        <!-- Main Content - Two Panel Layout -->
+        <div class="main-content">
+
+            <!-- Left Panel - Query Builder -->
+            <div class="left-panel">
+
+                <!-- Object Selection -->
+                <div class="builder-section">
+                    <div class="section-header">
+                        <lightning-icon icon-name="standard:custom_object" size="small"></lightning-icon>
+                        <h3 class="section-title">Select Salesforce Object</h3>
+                    </div>
+                    <div class="section-content">
+                        <div class="slds-form-element">
+                            <label class="slds-form-element__label" for="objectSelect">
+                                <abbr class="slds-required" title="required">*</abbr>
+                                Choose Salesforce Object
+                            </label>
+                            <div class="slds-form-element__control">
+                                <div class="slds-select_container">
+                                    <select class="slds-select custom-select" id="objectSelect"
+                                        onchange={handleObjectChange} value={selectedObject}>
+                                        <option value="">🔍 Search and select an object...</option>
+                                        <template for:each={objectOptions} for:item="option">
+                                            <option key={option.value} value={option.value}>
+                                                {option.label} <template if:true={option.isCustom}>(Custom)</template>
+                                            </option>
+                                        </template>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="slds-scrollable" style="height: 200px; border: 1px solid #d8dde6;">
-                                <template for:each={fieldOptions} for:item="field">
-                                    <div key={field.value} class="slds-checkbox slds-p-horizontal_small">
-                                        <input type="checkbox" id={field.value} data-field={field.value}
-                                            onchange={handleFieldSelection} />
-                                        <label class="slds-checkbox__label" for={field.value}>
-                                            <span class="slds-checkbox_faux"></span>
-                                            <span class="slds-form-element__label">
-                                                {field.label}
-                                                <template if:true={field.isIndexed}>
-                                                    <lightning-icon icon-name="utility:success" size="xx-small"
-                                                        title="Indexed Field"></lightning-icon>
-                                                </template>
-                                            </span>
-                                        </label>
+                            <template if:true={selectedObjectDescription}>
+                                <div class="object-description">
+                                    <lightning-icon icon-name="utility:info" size="xx-small"></lightning-icon>
+                                    <span>{selectedObjectDescription}</span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Field Selection -->
+                <template if:true={showFieldSelection}>
+                    <div class="builder-section">
+                        <div class="section-header">
+                            <lightning-icon icon-name="utility:multiselect_checkbox" size="small"></lightning-icon>
+                            <h3 class="section-title">Select Fields</h3>
+                            <div class="field-buttons">
+                                <button class="custom-button secondary" onclick={selectAllFields}>Select All</button>
+                                <button class="custom-button secondary" onclick={clearAllFields}>Clear All</button>
+                            </div>
+                        </div>
+                        <div class="section-content">
+                            <div class="field-grid">
+                                <template for:each={fieldSelectionOptions} for:item="field">
+                                    <div key={field.value} class="field-item">
+                                        <div class="slds-checkbox">
+                                            <input type="checkbox" id={field.fieldId} data-field={field.value}
+                                                onchange={handleFieldSelection} class="slds-checkbox__input" />
+                                            <label class="slds-checkbox__label" for={field.fieldId}>
+                                                <span class="slds-checkbox_faux"></span>
+                                                <span class="field-info">
+                                                    <span class="field-name">{field.label}</span>
+                                                    <template if:true={field.isDate}>
+                                                        <span class="field-type-badge date-badge">📅 DATE</span>
+                                                    </template>
+                                                    <template if:true={field.isPicklist}>
+                                                        <span class="field-type-badge picklist-badge">📋 PICKLIST</span>
+                                                    </template>
+                                                    <template if:true={field.isNumber}>
+                                                        <span class="field-type-badge number-badge">#️⃣ NUMBER</span>
+                                                    </template>
+                                                    <template if:true={field.isIndexed}>
+                                                        <lightning-icon icon-name="utility:success" size="xx-small"
+                                                            title="Indexed Field"
+                                                            class="indexed-badge"></lightning-icon>
+                                                    </template>
+                                                    <template if:true={field.isRequired}>
+                                                        <lightning-icon icon-name="utility:priority" size="xx-small"
+                                                            title="Required Field"
+                                                            class="required-badge"></lightning-icon>
+                                                    </template>
+                                                </span>
+                                            </label>
+                                        </div>
                                     </div>
                                 </template>
                             </div>
                         </div>
-                    </fieldset>
-                </div>
-            </template>
+                    </div>
+                </template>
 
-            <!-- WHERE Conditions -->
-            <template if:true={showConditions}>
-                <div class="slds-form-element slds-m-bottom_medium">
-                    <fieldset class="slds-form-element">
-                        <legend class="slds-form-element__legend slds-form-element__label">
-                            WHERE Conditions
-                        </legend>
-                        <div class="slds-form-element__control">
+                <!-- WHERE Conditions -->
+                <template if:true={showConditions}>
+                    <div class="builder-section">
+                        <div class="section-header">
+                            <lightning-icon icon-name="utility:filter" size="small"></lightning-icon>
+                            <h3 class="section-title">WHERE Conditions</h3>
+                        </div>
+                        <div class="section-content">
                             <template for:each={whereConditions} for:item="condition" for:index="index">
-                                <div key={condition.id} class="slds-grid slds-gutters slds-m-bottom_small">
-                                    <!-- Logic Operator -->
+                                <div key={condition.id} class="condition-row">
+                                    <!-- Logic Operator (AND/OR) -->
                                     <template if:false={condition.isFirst}>
-                                        <div class="slds-col slds-size_1-of-12">
-                                            <div class="slds-select_container">
-                                                <select class="slds-select" data-index={index}
-                                                    onchange={handleLogicOperatorChange}>
-                                                    <option value="AND">AND</option>
-                                                    <option value="OR">OR</option>
-                                                </select>
-                                            </div>
+                                        <div class="condition-logic">
+                                            <select class="slds-select mini-select" data-index={index}
+                                                onchange={handleLogicOperatorChange} value={condition.logicOperator}>
+                                                <option value="AND">AND</option>
+                                                <option value="OR">OR</option>
+                                            </select>
                                         </div>
                                     </template>
 
-                                    <!-- Field -->
-                                    <div class="slds-col slds-size_3-of-12">
-                                        <div class="slds-select_container">
-                                            <select class="slds-select" data-index={index} data-field="field"
-                                                onchange={handleConditionChange}>
-                                                <option value="">Select Field...</option>
-                                                <template for:each={fieldOptions} for:item="field">
-                                                    <option key={field.value} value={field.value}>{field.label}</option>
-                                                </template>
-                                            </select>
-                                        </div>
+                                    <!-- Field Selection -->
+                                    <div class="condition-field">
+                                        <select class="slds-select" data-index={index} data-field="field"
+                                            onchange={handleConditionChange} value={condition.field}>
+                                            <option value="">Select Field...</option>
+                                            <template for:each={fieldOptions} for:item="field">
+                                                <option key={field.value} value={field.value}>
+                                                    {field.label}
+                                                    <template if:true={field.isDate}> (Date)</template>
+                                                    <template if:true={field.isPicklist}> (Picklist)</template>
+                                                    <template if:true={field.isNumber}> (Number)</template>
+                                                </option>
+                                            </template>
+                                        </select>
                                     </div>
 
-                                    <!-- Operator -->
-                                    <div class="slds-col slds-size_2-of-12">
-                                        <div class="slds-select_container">
-                                            <select class="slds-select" data-index={index} data-field="operator"
-                                                onchange={handleConditionChange}>
-                                                <template for:each={operatorOptions} for:item="op">
-                                                    <option key={op.value} value={op.value}>{op.label}</option>
-                                                </template>
-                                            </select>
-                                        </div>
+                                    <!-- Operator Selection -->
+                                    <div class="condition-operator">
+                                        <select class="slds-select" data-index={index} data-field="operator"
+                                            onchange={handleConditionChange} value={condition.operator}>
+                                            <template for:each={operatorOptions} for:item="op">
+                                                <option key={op.value} value={op.value}>{op.label}</option>
+                                            </template>
+                                        </select>
                                     </div>
 
-                                    <!-- Value -->
-                                    <div class="slds-col slds-size_3-of-12">
-                                        <lightning-input type="text" data-index={index} data-field="value"
-                                            onchange={handleConditionChange} placeholder="Enter value...">
-                                        </lightning-input>
+                                    <!-- Dynamic Value Input -->
+                                    <div class="condition-value">
+                                        <!-- Date Field Input -->
+                                        <template if:true={condition.isDateField}>
+                                            <lightning-input type={condition.dateInputType} data-index={index}
+                                                data-field="value" onchange={handleConditionChange}
+                                                value={condition.value} variant="label-hidden" class="date-input">
+                                            </lightning-input>
+                                        </template>
+
+                                        <!-- Picklist Field Input -->
+                                        <template if:true={condition.isPicklistField}>
+                                            <lightning-combobox data-index={index} data-field="value"
+                                                onchange={handleConditionChange} options={condition.picklistOptions}
+                                                value={condition.value} placeholder="Select value..."
+                                                variant="label-hidden" class="picklist-input">
+                                            </lightning-combobox>
+                                        </template>
+
+                                        <!-- Number Field Input -->
+                                        <template if:true={condition.isNumberField}>
+                                            <lightning-input type="number" data-index={index} data-field="value"
+                                                onchange={handleConditionChange} value={condition.value}
+                                                variant="label-hidden" class="number-input">
+                                            </lightning-input>
+                                        </template>
+
+                                        <!-- Boolean Field Input -->
+                                        <template if:true={condition.isBooleanField}>
+                                            <lightning-combobox data-index={index} data-field="value"
+                                                onchange={handleConditionChange} options={condition.booleanOptions}
+                                                value={condition.value} placeholder="Select..." variant="label-hidden"
+                                                class="boolean-input">
+                                            </lightning-combobox>
+                                        </template>
+
+                                        <!-- Text Field Input (Default) -->
+                                        <template if:false={condition.isDateField}>
+                                            <template if:false={condition.isPicklistField}>
+                                                <template if:false={condition.isNumberField}>
+                                                    <template if:false={condition.isBooleanField}>
+                                                        <lightning-input type="text" data-index={index}
+                                                            data-field="value" onchange={handleConditionChange}
+                                                            value={condition.value} placeholder="Enter value..."
+                                                            variant="label-hidden" class="text-input">
+                                                        </lightning-input>
+                                                    </template>
+                                                </template>
+                                            </template>
+                                        </template>
                                     </div>
 
                                     <!-- Remove Button -->
-                                    <div class="slds-col slds-size_1-of-12">
+                                    <div class="condition-remove">
                                         <lightning-button-icon icon-name="utility:delete" variant="border-filled"
-                                            data-index={index} onclick={removeCondition}>
+                                            data-index={index} onclick={removeCondition} size="small">
                                         </lightning-button-icon>
                                     </div>
                                 </div>
                             </template>
-                            <lightning-button variant="brand" label="Add Condition" onclick={addCondition}>
-                            </lightning-button>
+
+                            <button class="custom-button primary" onclick={addCondition}>
+                                + Add Condition
+                            </button>
                         </div>
-                    </fieldset>
-                </div>
-            </template>
+                    </div>
+                </template>
 
-            <!-- ORDER BY, LIMIT, OFFSET -->
-            <template if:true={showAdditionalOptions}>
-                <div class="slds-grid slds-gutters slds-m-bottom_medium">
-                    <!-- ORDER BY -->
-                    <div class="slds-col slds-size_4-of-12">
-                        <lightning-combobox name="orderBy" label="ORDER BY" placeholder="Select field..."
-                            options={fieldOptions} value={orderByField} onchange={handleOrderByChange}>
-                        </lightning-combobox>
-                    </div>
+                <!-- Additional Options -->
+                <template if:true={showAdditionalOptions}>
+                    <div class="builder-section">
+                        <div class="section-header">
+                            <lightning-icon icon-name="utility:settings" size="small"></lightning-icon>
+                            <h3 class="section-title">Additional Options</h3>
+                        </div>
+                        <div class="section-content">
+                            <div class="options-grid">
+                                <div class="option-item">
+                                    <label class="option-label">ORDER BY</label>
+                                    <lightning-combobox name="orderBy" placeholder="Select field..."
+                                        options={fieldOptions} value={orderByField} onchange={handleOrderByChange}
+                                        variant="label-hidden">
+                                    </lightning-combobox>
+                                </div>
 
-                    <!-- Sort Direction -->
-                    <div class="slds-col slds-size_2-of-12">
-                        <lightning-combobox name="sortDirection" label="Direction" options={sortOptions}
-                            value={sortDirection} onchange={handleSortDirectionChange}>
-                        </lightning-combobox>
-                    </div>
+                                <div class="option-item">
+                                    <label class="option-label">Direction</label>
+                                    <lightning-combobox name="sortDirection" options={sortOptions} value={sortDirection}
+                                        onchange={handleSortDirectionChange} variant="label-hidden">
+                                    </lightning-combobox>
+                                </div>
 
-                    <!-- LIMIT -->
-                    <div class="slds-col slds-size_3-of-12">
-                        <lightning-input type="number" label="LIMIT" value={limitValue} onchange={handleLimitChange}
-                            max="50000">
-                        </lightning-input>
-                    </div>
+                                <div class="option-item">
+                                    <label class="option-label">LIMIT</label>
+                                    <lightning-input type="number" value={limitValue} onchange={handleLimitChange}
+                                        max="50000" min="1" variant="label-hidden" class="limit-input">
+                                    </lightning-input>
+                                </div>
 
-                    <!-- OFFSET -->
-                    <div class="slds-col slds-size_3-of-12">
-                        <lightning-input type="number" label="OFFSET" value={offsetValue} onchange={handleOffsetChange}>
-                        </lightning-input>
+                                <div class="option-item">
+                                    <label class="option-label">OFFSET</label>
+                                    <lightning-input type="number" value={offsetValue} onchange={handleOffsetChange}
+                                        min="0" variant="label-hidden" class="offset-input">
+                                    </lightning-input>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </template>
-
-            <!-- Generated Query -->
-            <div class="slds-form-element slds-m-bottom_medium">
-                <label class="slds-form-element__label">Generated SOQL Query</label>
-                <div class="slds-form-element__control">
-                    <div class="slds-textarea"
-                        style="background-color: #f3f3f3; font-family: monospace; min-height: 100px; padding: 10px;">
-                        {generatedQuery}
-                    </div>
-                    <div class="slds-m-top_small">
-                        <lightning-button variant="brand" label="Copy Query" onclick={copyQuery}>
-                        </lightning-button>
-                        <lightning-button variant="success" label="Execute Query" onclick={executeQuery}
-                            class="slds-m-left_small">
-                        </lightning-button>
-                    </div>
-                </div>
+                </template>
             </div>
 
-            <!-- AI Insights -->
-            <template if:true={showInsights}>
-                <lightning-card title="AI Performance Insights" icon-name="utility:einstein">
-                    <div class="slds-p-around_medium">
-                        <!-- Performance Score -->
-                        <div class="slds-m-bottom_medium">
-                            <div class="slds-grid slds-grid_align-spread">
-                                <div class="slds-col">
-                                    <span class="slds-text-heading_small">Performance Score:</span>
-                                </div>
-                                <div class="slds-col">
-                                    <lightning-badge label={performanceScore} variant={performanceScoreVariant}>
-                                    </lightning-badge>
-                                </div>
-                            </div>
-                        </div>
+            <!-- Right Panel - Query & Insights -->
+            <div class="right-panel">
 
-                        <!-- Optimization Tips -->
-                        <template if:true={optimizationTips.length}>
-                            <div class="slds-m-bottom_medium">
-                                <h4 class="slds-text-heading_small slds-m-bottom_small">Optimization Tips:</h4>
+                <!-- Generated Query -->
+                <div class="query-section">
+                    <div class="section-header">
+                        <lightning-icon icon-name="utility:code" size="small"></lightning-icon>
+                        <h3 class="section-title">Generated SOQL Query</h3>
+                        <button class="custom-button secondary" onclick={copyQuery}>
+                            📋 Copy
+                        </button>
+                    </div>
+                    <div class="query-content">
+                        <div class="query-editor">
+                            <pre class="query-text">{generatedQuery}</pre>
+                        </div>
+                        <div class="query-actions">
+                            <button class="custom-button primary execute-btn" onclick={executeQuery}
+                                disabled={isLoading}>
+                                ⚡ Execute Query
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Optimization -->
+                <template if:true={showInsights}>
+                    <div class="insights-section">
+                        <div class="section-header">
+                            <lightning-icon icon-name="utility:einstein" size="small" class="ai-icon"></lightning-icon>
+                            <h3 class="section-title">AI Optimization</h3>
+                            <div class="performance-badge {performanceScoreVariant}">{performanceGrade}</div>
+                        </div>
+                        <div class="insights-content">
+                            <template if:true={hasOptimizationTips}>
                                 <template for:each={optimizationTips} for:item="tip">
-                                    <div key={tip} class="slds-m-bottom_x-small">
-                                        <lightning-icon icon-name="utility:info" size="x-small"></lightning-icon>
-                                        <span class="slds-m-left_x-small">{tip}</span>
+                                    <div key={tip} class="tip-item">
+                                        <lightning-icon icon-name="utility:warning" size="xx-small"
+                                            class="tip-icon"></lightning-icon>
+                                        <span class="tip-text">{tip}</span>
                                     </div>
                                 </template>
-                            </div>
-                        </template>
-
-                        <!-- Query Explanation -->
-                        <template if:true={queryExplanation}>
-                            <div class="slds-m-bottom_medium">
-                                <h4 class="slds-text-heading_small slds-m-bottom_small">Query Explanation:</h4>
-                                <p>{queryExplanation}</p>
-                            </div>
-                        </template>
-
-                        <!-- Best Practice Tip -->
-                        <template if:true={bestPracticeTip}>
-                            <div class="slds-box slds-theme_info">
-                                <lightning-icon icon-name="utility:knowledge_base" size="small"></lightning-icon>
-                                <span class="slds-m-left_small"><strong>Tip:</strong> {bestPracticeTip}</span>
-                            </div>
-                        </template>
+                            </template>
+                        </div>
                     </div>
-                </lightning-card>
-            </template>
+                </template>
 
-            <!-- Query Results -->
-            <template if:true={queryResults}>
-                <lightning-card title="Query Results" icon-name="utility:table">
-                    <div class="slds-p-around_medium">
-                        <p class="slds-m-bottom_small">Found {recordCount} record(s)</p>
-                        <template if:true={queryResults.length}>
-                            <div style="height: 300px;">
-                                <lightning-datatable key-field="Id" data={queryResults} columns={tableColumns}
-                                    hide-checkbox-column="true">
-                                </lightning-datatable>
-                            </div>
-                        </template>
+                <!-- Query Explanation -->
+                <template if:true={queryExplanation}>
+                    <div class="explanation-section">
+                        <div class="section-header">
+                            <lightning-icon icon-name="utility:info" size="small"></lightning-icon>
+                            <h3 class="section-title">Query Explanation</h3>
+                        </div>
+                        <div class="explanation-content">
+                            <p class="explanation-text">{queryExplanation}</p>
+                        </div>
                     </div>
-                </lightning-card>
-            </template>
+                </template>
+
+                <!-- Best Practice Tip -->
+                <template if:true={bestPracticeTip}>
+                    <div class="tip-section">
+                        <div class="section-header">
+                            <lightning-icon icon-name="utility:knowledge_base" size="small"></lightning-icon>
+                            <h3 class="section-title">Best Practice Tip</h3>
+                        </div>
+                        <div class="tip-content">
+                            <p class="tip-text">{bestPracticeTip}</p>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Query Results -->
+                <template if:true={showResults}>
+                    <div class="results-section">
+                        <div class="section-header">
+                            <lightning-icon icon-name="utility:table" size="small"></lightning-icon>
+                            <h3 class="section-title">Query Results</h3>
+                            <div class="results-count">{recordCount} records</div>
+                        </div>
+                        <div class="results-content">
+                            <template if:true={hasQueryResults}>
+                                <div class="dark-datatable">
+                                    <lightning-datatable key-field="Id" data={queryResults} columns={tableColumns}
+                                        hide-checkbox-column="true" max-row-selection="0">
+                                    </lightning-datatable>
+                                </div>
+                            </template>
+                            <template if:false={hasQueryResults}>
+                                <div class="no-results">
+                                    <span>No records found matching your criteria.</span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
         </div>
-    </lightning-card>
+    </div>
 </template>

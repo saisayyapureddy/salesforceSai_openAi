@@ -1,18 +1,14 @@
 import { LightningElement, track, api } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+import getAllObjects from '@salesforce/apex/DynamicSoqlController.getAllObjects';
 import getObjectMetadata from '@salesforce/apex/DynamicSoqlController.getObjectMetadata';
+import getFieldPicklistValues from '@salesforce/apex/DynamicSoqlController.getFieldPicklistValues';
 import executeQuery from '@salesforce/apex/DynamicSoqlController.executeQuery';
+import analyzeQuery from '@salesforce/apex/DynamicSoqlController.analyzeQuery';
+import getBestPractices from '@salesforce/apex/DynamicSoqlController.getBestPractices';
 
 export default class DynamicSoqlBuilder extends LightningElement {
-    @track objectOptions = [
-        { label: 'Account', value: 'Account' },
-        { label: 'Contact', value: 'Contact' },
-        { label: 'Lead', value: 'Lead' },
-        { label: 'Opportunity', value: 'Opportunity' },
-        { label: 'Case', value: 'Case' },
-        { label: 'User', value: 'User' }
-    ];
-
+    @track objectOptions = [];
     @track fieldOptions = [];
     @track selectedObject = '';
     @track selectedFields = [];
@@ -26,44 +22,98 @@ export default class DynamicSoqlBuilder extends LightningElement {
     @track queryResults = [];
     @track tableColumns = [];
     @track recordCount = 0;
+    @track isLoading = false;
 
     // AI Insights
-    @track performanceScore = 'Good';
+    @track performanceScore = 85;
+    @track performanceGrade = 'Good';
     @track performanceScoreVariant = 'success';
     @track optimizationTips = [];
     @track queryExplanation = '';
     @track bestPracticeTip = '';
+    @track estimatedRecords = '';
 
     // UI State
     @track showFieldSelection = false;
     @track showConditions = false;
     @track showAdditionalOptions = false;
     @track showInsights = false;
+    @track showResults = false;
+
+    // Field metadata cache
+    fieldMetadataCache = new Map();
 
     // Options
     operatorOptions = [
-        { label: 'Equals', value: '=' },
-        { label: 'Not Equals', value: '!=' },
-        { label: 'Less Than', value: '<' },
-        { label: 'Less Than or Equal', value: '<=' },
-        { label: 'Greater Than', value: '>' },
-        { label: 'Greater Than or Equal', value: '>=' },
+        { label: 'Equals (=)', value: '=' },
+        { label: 'Not Equals (!=)', value: '!=' },
+        { label: 'Less Than (<)', value: '<' },
+        { label: 'Less Than or Equal (<=)', value: '<=' },
+        { label: 'Greater Than (>)', value: '>' },
+        { label: 'Greater Than or Equal (>=)', value: '>=' },
         { label: 'Like', value: 'LIKE' },
         { label: 'In', value: 'IN' },
-        { label: 'Not In', value: 'NOT IN' }
+        { label: 'Not In', value: 'NOT IN' },
+        { label: 'Includes', value: 'INCLUDES' },
+        { label: 'Excludes', value: 'EXCLUDES' }
     ];
 
     sortOptions = [
-        { label: 'Ascending', value: 'ASC' },
-        { label: 'Descending', value: 'DESC' }
+        { label: 'Ascending (A-Z)', value: 'ASC' },
+        { label: 'Descending (Z-A)', value: 'DESC' }
     ];
 
-    indexedFields = ['Id', 'Name', 'OwnerId', 'CreatedDate', 'LastModifiedDate', 'SystemModStamp'];
     conditionCounter = 0;
+    @track currentTipIndex = 0;
+    @track allBestPractices = [];
 
-    connectedCallback() {
-        this.generateDefaultQuery();
-        this.updateAIInsights();
+    async connectedCallback() {
+        this.isLoading = true;
+        try {
+            await this.loadObjects();
+            await this.loadBestPractices();
+            this.generateDefaultQuery();
+            this.updateAIInsights();
+            this.rotateTips();
+        } catch (error) {
+            console.error('Initialization error:', error);
+            this.showToast('Error', 'Failed to initialize component', 'error');
+        } finally {
+            this.isLoading = false;
+        }
+    }
+
+    // Load all objects from Apex
+    async loadObjects() {
+        try {
+            this.objectOptions = await getAllObjects();
+            console.log('Loaded objects:', this.objectOptions.length);
+        } catch (error) {
+            console.error('Error loading objects:', error);
+            this.showToast('Error', 'Failed to load Salesforce objects', 'error');
+        }
+    }
+
+    // Load best practices
+    async loadBestPractices() {
+        try {
+            this.allBestPractices = await getBestPractices();
+            if (this.allBestPractices.length > 0) {
+                this.bestPracticeTip = this.allBestPractices[0];
+            }
+        } catch (error) {
+            console.error('Error loading best practices:', error);
+        }
+    }
+
+    // Rotate tips every 10 seconds
+    rotateTips() {
+        setInterval(() => {
+            if (this.allBestPractices.length > 0) {
+                this.currentTipIndex = (this.currentTipIndex + 1) % this.allBestPractices.length;
+                this.bestPracticeTip = this.allBestPractices[this.currentTipIndex];
+            }
+        }, 10000);
     }
 
     // Object Selection Handler
@@ -73,23 +123,31 @@ export default class DynamicSoqlBuilder extends LightningElement {
         this.whereConditions = [];
         this.orderByField = '';
         this.queryResults = [];
+        this.recordCount = 0;
+        this.showResults = false;
+        this.fieldMetadataCache.clear();
 
         if (this.selectedObject) {
+            this.isLoading = true;
             try {
                 const metadata = await getObjectMetadata({ objectName: this.selectedObject });
-                this.fieldOptions = metadata.fields.map(field => ({
-                    label: field,
-                    value: field,
-                    isIndexed: this.indexedFields.includes(field)
-                }));
+                this.fieldOptions = metadata.fieldOptions;
                 this.selectedObjectDescription = metadata.description;
+
+                // Cache field metadata for quick access
+                this.fieldOptions.forEach(field => {
+                    this.fieldMetadataCache.set(field.value, field);
+                });
+
                 this.showFieldSelection = true;
                 this.showConditions = true;
                 this.showAdditionalOptions = true;
                 this.generateQuery();
             } catch (error) {
                 console.error('Error fetching object metadata:', error);
-                this.showToast('Error', 'Failed to fetch object metadata', 'error');
+                this.showToast('Error', 'Failed to fetch object metadata: ' + error.body?.message, 'error');
+            } finally {
+                this.isLoading = false;
             }
         } else {
             this.resetForm();
@@ -100,7 +158,9 @@ export default class DynamicSoqlBuilder extends LightningElement {
     handleFieldSelection(event) {
         const fieldName = event.target.dataset.field;
         if (event.target.checked) {
-            this.selectedFields.push(fieldName);
+            if (!this.selectedFields.includes(fieldName)) {
+                this.selectedFields.push(fieldName);
+            }
         } else {
             this.selectedFields = this.selectedFields.filter(field => field !== fieldName);
         }
@@ -122,7 +182,9 @@ export default class DynamicSoqlBuilder extends LightningElement {
     updateCheckboxes() {
         const checkboxes = this.template.querySelectorAll('input[type="checkbox"]');
         checkboxes.forEach(checkbox => {
-            checkbox.checked = this.selectedFields.includes(checkbox.dataset.field);
+            if (checkbox.dataset.field) {
+                checkbox.checked = this.selectedFields.includes(checkbox.dataset.field);
+            }
         });
     }
 
@@ -134,7 +196,9 @@ export default class DynamicSoqlBuilder extends LightningElement {
             operator: '=',
             value: '',
             logicOperator: 'AND',
-            isFirst: this.whereConditions.length === 0
+            isFirst: this.whereConditions.length === 0,
+            fieldType: 'text',
+            picklistOptions: []
         };
         this.whereConditions.push(newCondition);
         this.generateQuery();
@@ -150,19 +214,49 @@ export default class DynamicSoqlBuilder extends LightningElement {
         this.generateQuery();
     }
 
-    handleConditionChange(event) {
+    async handleConditionChange(event) {
         const index = parseInt(event.target.dataset.index);
         const field = event.target.dataset.field;
         const value = event.target.value;
 
-        this.whereConditions[index][field] = value;
-        this.generateQuery();
+        if (this.whereConditions[index]) {
+            this.whereConditions[index][field] = value;
+
+            // When field changes, update the condition's field type and options
+            if (field === 'field' && value) {
+                const fieldMetadata = this.fieldMetadataCache.get(value);
+                if (fieldMetadata) {
+                    this.whereConditions[index].fieldType = this.getInputType(fieldMetadata);
+                    this.whereConditions[index].picklistOptions = fieldMetadata.picklistValues || [];
+                    this.whereConditions[index].value = ''; // Reset value when field changes
+                }
+            }
+
+            this.generateQuery();
+        }
     }
 
     handleLogicOperatorChange(event) {
         const index = parseInt(event.target.dataset.index);
-        this.whereConditions[index].logicOperator = event.target.value;
-        this.generateQuery();
+        if (this.whereConditions[index]) {
+            this.whereConditions[index].logicOperator = event.target.value;
+            this.generateQuery();
+        }
+    }
+
+    // Get appropriate input type based on field metadata
+    getInputType(fieldMetadata) {
+        if (fieldMetadata.isDate) {
+            return fieldMetadata.type === 'DATETIME' ? 'datetime-local' : 'date';
+        } else if (fieldMetadata.isPicklist) {
+            return 'picklist';
+        } else if (fieldMetadata.isNumber) {
+            return 'number';
+        } else if (fieldMetadata.isBoolean) {
+            return 'checkbox';
+        } else {
+            return 'text';
+        }
     }
 
     // Additional Options Handlers
@@ -194,6 +288,7 @@ export default class DynamicSoqlBuilder extends LightningElement {
     generateQuery() {
         if (!this.selectedObject) {
             this.generatedQuery = 'SELECT Id FROM Account LIMIT 10';
+            this.updateAIInsights();
             return;
         }
 
@@ -220,12 +315,43 @@ export default class DynamicSoqlBuilder extends LightningElement {
                     }
 
                     let value = condition.value;
-                    if (condition.operator === 'LIKE') {
-                        value = `'%${value}%'`;
-                    } else if (condition.operator === 'IN' || condition.operator === 'NOT IN') {
-                        value = `(${value})`;
-                    } else if (isNaN(value)) {
-                        value = `'${value}'`;
+                    const fieldMetadata = this.fieldMetadataCache.get(condition.field);
+
+                    // Format value based on field type
+                    if (fieldMetadata) {
+                        if (fieldMetadata.isDate) {
+                            // Date fields need specific formatting
+                            if (fieldMetadata.type === 'DATETIME') {
+                                value = value.replace('T', ' ') + ':00'; // Convert datetime-local to SOQL format
+                            }
+                            value = `${value}`;
+                        } else if (condition.operator === 'LIKE') {
+                            value = `'%${value}%'`;
+                        } else if (condition.operator === 'IN' || condition.operator === 'NOT IN') {
+                            // Handle IN operator - value should be comma-separated
+                            const inValues = value.split(',').map(v => `'${v.trim()}'`).join(',');
+                            value = `(${inValues})`;
+                        } else if (condition.operator === 'INCLUDES' || condition.operator === 'EXCLUDES') {
+                            value = `'${value}'`;
+                        } else if (fieldMetadata.isNumber) {
+                            // Numbers don't need quotes
+                            value = value;
+                        } else if (fieldMetadata.isBoolean) {
+                            // Boolean values
+                            value = value.toLowerCase() === 'true' ? 'true' : 'false';
+                        } else {
+                            // Text fields need quotes
+                            value = `'${value}'`;
+                        }
+                    } else {
+                        // Fallback formatting
+                        if (condition.operator === 'LIKE') {
+                            value = `'%${value}%'`;
+                        } else if (condition.operator === 'IN' || condition.operator === 'NOT IN') {
+                            value = `(${value})`;
+                        } else if (isNaN(value) && value !== 'true' && value !== 'false' && value !== 'null') {
+                            value = `'${value}'`;
+                        }
                     }
 
                     conditionStr += `${condition.field} ${condition.operator} ${value}`;
@@ -259,105 +385,35 @@ export default class DynamicSoqlBuilder extends LightningElement {
 
     generateDefaultQuery() {
         this.generatedQuery = 'SELECT Id FROM Account LIMIT 10';
+        this.updateAIInsights();
     }
 
     // AI Insights
-    updateAIInsights() {
-        this.optimizationTips = [];
-        let score = 'Good';
-        let scoreVariant = 'success';
+    async updateAIInsights() {
+        try {
+            const analysis = await analyzeQuery({ query: this.generatedQuery });
 
-        // Check for indexed fields in WHERE clause
-        const hasIndexedWhere = this.whereConditions.some(condition => 
-            this.indexedFields.includes(condition.field) && condition.value
-        );
+            this.performanceScore = analysis.performanceScore;
+            this.performanceGrade = analysis.performanceGrade;
+            this.performanceScoreVariant = analysis.gradeVariant;
+            this.optimizationTips = analysis.suggestions;
+            this.queryExplanation = analysis.explanation;
+            this.estimatedRecords = analysis.estimatedRecords;
 
-        if (!hasIndexedWhere && this.whereConditions.length > 0) {
-            this.optimizationTips.push('Use indexed fields in WHERE clause for better performance');
-            score = 'Fair';
-            scoreVariant = 'warning';
+        } catch (error) {
+            console.error('Error analyzing query:', error);
+            // Fallback to local analysis
+            this.performanceScore = 75;
+            this.performanceGrade = 'Good';
+            this.performanceScoreVariant = 'success';
+            this.optimizationTips = ['Query analysis temporarily unavailable'];
         }
-
-        // Check for too many fields
-        if (this.selectedFields.length > 10) {
-            this.optimizationTips.push('Consider selecting only the fields you need');
-        }
-
-        // Check LIMIT
-        if (!this.limitValue || this.limitValue > 10000) {
-            this.optimizationTips.push('Use LIMIT to prevent hitting governor limits');
-            if (score === 'Good') {
-                score = 'Fair';
-                scoreVariant = 'warning';
-            }
-        }
-
-        // Check for negative operators
-        const hasNegativeOperators = this.whereConditions.some(condition => 
-            ['!=', 'NOT IN', 'NOT LIKE'].includes(condition.operator)
-        );
-
-        if (hasNegativeOperators) {
-            this.optimizationTips.push('Negative operators can impact performance');
-            score = 'Poor';
-            scoreVariant = 'error';
-        }
-
-        this.performanceScore = score;
-        this.performanceScoreVariant = scoreVariant;
-
-        // Generate query explanation
-        this.generateQueryExplanation();
-
-        // Random best practice tip
-        const bestPractices = [
-            'Use indexed fields in WHERE clauses for better performance',
-            'Limit the number of fields returned to only what you need',
-            'Use LIMIT clause to prevent hitting governor limits',
-            'Avoid SOQL queries inside loops',
-            'Use selective filters to reduce result set size'
-        ];
-        this.bestPracticeTip = bestPractices[Math.floor(Math.random() * bestPractices.length)];
-    }
-
-    generateQueryExplanation() {
-        if (!this.selectedObject) {
-            this.queryExplanation = '';
-            return;
-        }
-
-        let explanation = `This query retrieves `;
-
-        if (this.selectedFields.length === 0) {
-            explanation += 'the Id field ';
-        } else if (this.selectedFields.length === 1) {
-            explanation += `the ${this.selectedFields[0]} field `;
-        } else {
-            explanation += `${this.selectedFields.length} fields `;
-        }
-
-        explanation += `from ${this.selectedObject} records`;
-
-        if (this.whereConditions.length > 0) {
-            explanation += ' with filtering conditions';
-        }
-
-        if (this.orderByField) {
-            explanation += ` sorted by ${this.orderByField}`;
-        }
-
-        if (this.limitValue) {
-            explanation += ` limited to ${this.limitValue} records`;
-        }
-
-        explanation += '.';
-        this.queryExplanation = explanation;
     }
 
     // Actions
     copyQuery() {
         navigator.clipboard.writeText(this.generatedQuery).then(() => {
-            this.showToast('Success', 'Query copied to clipboard', 'success');
+            this.showToast('Success', 'Query copied to clipboard! 📋', 'success');
         }).catch(err => {
             console.error('Failed to copy: ', err);
             this.showToast('Error', 'Failed to copy query', 'error');
@@ -370,25 +426,61 @@ export default class DynamicSoqlBuilder extends LightningElement {
             return;
         }
 
+        this.isLoading = true;
         try {
             const result = await executeQuery({ query: this.generatedQuery });
             this.queryResults = result.records;
             this.recordCount = result.totalSize;
 
-            // Generate table columns
+            // Generate table columns with better field type detection
             if (this.queryResults.length > 0) {
                 const firstRecord = this.queryResults[0];
-                this.tableColumns = Object.keys(firstRecord).map(field => ({
-                    label: field,
-                    fieldName: field,
-                    type: typeof firstRecord[field] === 'number' ? 'number' : 'text'
-                }));
+                this.tableColumns = Object.keys(firstRecord).map(field => {
+                    const fieldMetadata = this.fieldMetadataCache.get(field);
+                    return {
+                        label: field,
+                        fieldName: field,
+                        type: this.getTableColumnType(field, firstRecord[field], fieldMetadata),
+                        cellAttributes: { class: 'table-cell' }
+                    };
+                });
             }
 
-            this.showToast('Success', `Query executed successfully. Found ${this.recordCount} records.`, 'success');
+            this.showResults = true;
+            this.showToast('Success', `Query executed successfully! Found ${this.recordCount} records. ⚡`, 'success');
+
         } catch (error) {
             console.error('Query execution error:', error);
             this.showToast('Error', `Query execution failed: ${error.body?.message || error.message}`, 'error');
+        } finally {
+            this.isLoading = false;
+        }
+    }
+
+    getTableColumnType(fieldName, value, fieldMetadata) {
+        if (fieldMetadata) {
+            if (fieldMetadata.isDate) {
+                return fieldMetadata.type === 'DATETIME' ? 'date' : 'date-local';
+            } else if (fieldMetadata.isNumber) {
+                return 'number';
+            } else if (fieldMetadata.isBoolean) {
+                return 'boolean';
+            }
+        }
+
+        // Fallback logic
+        if (typeof value === 'number') {
+            return 'number';
+        } else if (fieldName.toLowerCase().includes('date')) {
+            return 'date';
+        } else if (fieldName.toLowerCase().includes('email')) {
+            return 'email';
+        } else if (fieldName.toLowerCase().includes('phone')) {
+            return 'phone';
+        } else if (fieldName.toLowerCase().includes('url') || fieldName.toLowerCase().includes('website')) {
+            return 'url';
+        } else {
+            return 'text';
         }
     }
 
@@ -402,7 +494,9 @@ export default class DynamicSoqlBuilder extends LightningElement {
         this.showConditions = false;
         this.showAdditionalOptions = false;
         this.showInsights = false;
+        this.showResults = false;
         this.queryResults = [];
+        this.fieldMetadataCache.clear();
         this.generateDefaultQuery();
     }
 
@@ -413,5 +507,57 @@ export default class DynamicSoqlBuilder extends LightningElement {
             variant: variant,
         });
         this.dispatchEvent(evt);
+    }
+
+    // Getters for UI
+    get hasQueryResults() {
+        return this.queryResults && this.queryResults.length > 0;
+    }
+
+    get scoreProgressClass() {
+        if (this.performanceScore >= 90) return 'progress-excellent';
+        if (this.performanceScore >= 75) return 'progress-good';
+        if (this.performanceScore >= 60) return 'progress-fair';
+        return 'progress-poor';
+    }
+
+    get fieldSelectionOptions() {
+        return this.fieldOptions.map(field => ({
+            ...field,
+            fieldId: `field-${field.value}`
+        }));
+    }
+
+    get hasOptimizationTips() {
+        return this.optimizationTips && this.optimizationTips.length > 0;
+    }
+
+    // Enhanced WHERE condition helpers
+    getConditionInputType(condition) {
+        return condition.fieldType || 'text';
+    }
+
+    getConditionPicklistOptions(condition) {
+        return condition.picklistOptions || [];
+    }
+
+    isPicklistCondition(condition) {
+        return condition.fieldType === 'picklist';
+    }
+
+    isDateCondition(condition) {
+        return condition.fieldType === 'date' || condition.fieldType === 'datetime-local';
+    }
+
+    isNumberCondition(condition) {
+        return condition.fieldType === 'number';
+    }
+
+    isBooleanCondition(condition) {
+        return condition.fieldType === 'checkbox';
+    }
+
+    isTextCondition(condition) {
+        return condition.fieldType === 'text' || !condition.fieldType;
     }
 }
